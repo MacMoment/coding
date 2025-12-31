@@ -9,7 +9,8 @@ import { SubscriptionTier, SubscriptionStatus, TransactionType } from '@forgecra
 @Injectable()
 export class BillingService {
   private readonly logger = new Logger(BillingService.name);
-  private readonly stripe: Stripe;
+  private readonly stripe: Stripe | null;
+  private readonly billingEnabled: boolean;
 
   constructor(
     private readonly configService: ConfigService,
@@ -17,9 +18,22 @@ export class BillingService {
     private readonly usersService: UsersService,
   ) {
     const stripeKey = this.configService.get('STRIPE_SECRET_KEY');
-    this.stripe = new Stripe(stripeKey || 'sk_test_placeholder', {
-      apiVersion: '2023-10-16',
-    });
+    this.billingEnabled = !!stripeKey && stripeKey !== '';
+    
+    if (this.billingEnabled) {
+      this.stripe = new Stripe(stripeKey, {
+        apiVersion: '2023-10-16',
+      });
+    } else {
+      this.stripe = null;
+      this.logger.warn('Stripe API key not configured. Billing features are disabled.');
+    }
+  }
+
+  private ensureBillingEnabled(): void {
+    if (!this.billingEnabled || !this.stripe) {
+      throw new BadRequestException('Billing is not configured. Please contact support.');
+    }
   }
 
   getPlans() {
@@ -39,6 +53,8 @@ export class BillingService {
   }
 
   async createCheckoutSession(userId: string, tier: string) {
+    this.ensureBillingEnabled();
+    
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
     });
@@ -61,7 +77,7 @@ export class BillingService {
     if (existingSub?.stripeCustomerId) {
       customerId = existingSub.stripeCustomerId;
     } else {
-      const customer = await this.stripe.customers.create({
+      const customer = await this.stripe!.customers.create({
         email: user.email,
         name: user.displayName,
         metadata: { userId },
@@ -70,7 +86,7 @@ export class BillingService {
     }
 
     // Create checkout session
-    const session = await this.stripe.checkout.sessions.create({
+    const session = await this.stripe!.checkout.sessions.create({
       customer: customerId,
       mode: 'subscription',
       payment_method_types: ['card'],
@@ -95,6 +111,8 @@ export class BillingService {
   }
 
   async createTokenPackCheckout(userId: string, packId: string) {
+    this.ensureBillingEnabled();
+    
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
     });
@@ -117,7 +135,7 @@ export class BillingService {
     if (existingSub?.stripeCustomerId) {
       customerId = existingSub.stripeCustomerId;
     } else {
-      const customer = await this.stripe.customers.create({
+      const customer = await this.stripe!.customers.create({
         email: user.email,
         name: user.displayName,
         metadata: { userId },
@@ -126,7 +144,7 @@ export class BillingService {
     }
 
     // Create checkout session for one-time payment
-    const session = await this.stripe.checkout.sessions.create({
+    const session = await this.stripe!.checkout.sessions.create({
       customer: customerId,
       mode: 'payment',
       payment_method_types: ['card'],
@@ -152,11 +170,13 @@ export class BillingService {
   }
 
   async handleWebhook(payload: Buffer, signature: string) {
+    this.ensureBillingEnabled();
+    
     const webhookSecret = this.configService.get('STRIPE_WEBHOOK_SECRET');
     
     let event: Stripe.Event;
     try {
-      event = this.stripe.webhooks.constructEvent(payload, signature, webhookSecret || '');
+      event = this.stripe!.webhooks.constructEvent(payload, signature, webhookSecret || '');
     } catch (err) {
       this.logger.error('Webhook signature verification failed', err);
       throw new BadRequestException('Webhook signature verification failed');
@@ -332,6 +352,8 @@ export class BillingService {
   }
 
   async getPortalSession(userId: string) {
+    this.ensureBillingEnabled();
+    
     const existingSub = await this.prisma.subscription.findFirst({
       where: { userId },
     });
@@ -340,7 +362,7 @@ export class BillingService {
       throw new BadRequestException('No billing account found');
     }
 
-    const session = await this.stripe.billingPortal.sessions.create({
+    const session = await this.stripe!.billingPortal.sessions.create({
       customer: existingSub.stripeCustomerId,
       return_url: `${this.configService.get('NEXT_PUBLIC_APP_URL')}/dashboard`,
     });

@@ -11,7 +11,7 @@ export class CheckpointsService {
     private readonly storageService: StorageService,
   ) {}
 
-  async create(userId: string, projectId: string, summary: string) {
+  async create(userId: string, projectId: string, summary: string, skipTokenCharge = false) {
     // Verify project ownership
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
@@ -26,14 +26,16 @@ export class CheckpointsService {
       throw new ForbiddenException('Access denied');
     }
 
-    // Check token balance
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { tokenBalance: true },
-    });
+    // Check token balance (skip for auto-backups)
+    if (!skipTokenCharge) {
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { tokenBalance: true },
+      });
 
-    if (!user || user.tokenBalance < TOKEN_COSTS.CHECKPOINT) {
-      throw new ForbiddenException('Insufficient token balance');
+      if (!user || user.tokenBalance < TOKEN_COSTS.CHECKPOINT) {
+        throw new ForbiddenException('Insufficient token balance');
+      }
     }
 
     // Create snapshot
@@ -65,21 +67,23 @@ export class CheckpointsService {
       },
     });
 
-    // Deduct tokens
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: { tokenBalance: { decrement: TOKEN_COSTS.CHECKPOINT } },
-    });
+    // Deduct tokens (skip for auto-backups)
+    if (!skipTokenCharge) {
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: { tokenBalance: { decrement: TOKEN_COSTS.CHECKPOINT } },
+      });
 
-    await this.prisma.tokenTransaction.create({
-      data: {
-        userId,
-        amount: -TOKEN_COSTS.CHECKPOINT,
-        type: TransactionType.CHECKPOINT_COST,
-        description: `Checkpoint created: ${summary}`,
-        reference: checkpoint.id,
-      },
-    });
+      await this.prisma.tokenTransaction.create({
+        data: {
+          userId,
+          amount: -TOKEN_COSTS.CHECKPOINT,
+          type: TransactionType.CHECKPOINT_COST,
+          description: `Checkpoint created: ${summary}`,
+          reference: checkpoint.id,
+        },
+      });
+    }
 
     return checkpoint;
   }
@@ -166,8 +170,8 @@ export class CheckpointsService {
       throw new NotFoundException('Checkpoint not found');
     }
 
-    // Create a backup checkpoint before restore
-    await this.create(userId, projectId, 'Auto-backup before restore');
+    // Create a backup checkpoint before restore (skip token charge to prevent abuse)
+    await this.create(userId, projectId, 'Auto-backup before restore', true);
 
     // Get snapshot from S3
     const files = await this.storageService.getProjectSnapshot(checkpoint.snapshotUrl);
