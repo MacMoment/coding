@@ -10,7 +10,7 @@
     "migrate:deploy": "prisma migrate deploy",
     "seed": "tsx src/seed.ts",
     "studio": "prisma studio",
-    "build": "tsc",
+    "build": "prisma generate && tsc",
     "dev": "tsc --watch"
   },
   "dependencies": {
