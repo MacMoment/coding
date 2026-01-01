@@ -13,6 +13,7 @@ import {
   Loader2,
   Coins,
   Gift,
+  Settings,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -115,6 +116,13 @@ export default function DashboardPage() {
                 </>
               )}
             </Button>
+            {user?.role === 'ADMIN' && (
+              <Link href="/admin">
+                <Button variant="ghost" size="icon" title="Admin Panel">
+                  <Settings className="h-4 w-4" />
+                </Button>
+              </Link>
+            )}
           </nav>
         </div>
       </header>

@@ -268,6 +268,104 @@ class ApiClient {
   async getDocsStats() {
     return this.request<any>('/docs/stats');
   }
+
+  // Admin - Dashboard
+  async getAdminDashboard() {
+    return this.request<any>('/admin/dashboard');
+  }
+
+  // Admin - Users
+  async getAdminUsers(page = 1, limit = 20, search?: string) {
+    const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+    if (search) params.set('search', search);
+    return this.request<any>(`/admin/users?${params.toString()}`);
+  }
+
+  async getAdminUser(userId: string) {
+    return this.request<any>(`/admin/users/${userId}`);
+  }
+
+  async updateUserRole(userId: string, role: string) {
+    return this.request<any>(`/admin/users/${userId}/role`, { method: 'PUT', body: { role } });
+  }
+
+  async adjustUserTokens(userId: string, amount: number, reason?: string) {
+    return this.request<any>(`/admin/users/${userId}/tokens`, { method: 'POST', body: { amount, reason } });
+  }
+
+  async updateUserTier(userId: string, tier: string) {
+    return this.request<any>(`/admin/users/${userId}/tier`, { method: 'PUT', body: { tier } });
+  }
+
+  async deleteAdminUser(userId: string) {
+    return this.request<any>(`/admin/users/${userId}`, { method: 'DELETE' });
+  }
+
+  // Admin - Products
+  async getAdminProducts(page = 1, limit = 20, search?: string) {
+    const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+    if (search) params.set('search', search);
+    return this.request<any>(`/admin/products?${params.toString()}`);
+  }
+
+  async updateAdminProduct(productId: string, data: any) {
+    return this.request<any>(`/admin/products/${productId}`, { method: 'PUT', body: data });
+  }
+
+  async deleteAdminProduct(productId: string) {
+    return this.request<any>(`/admin/products/${productId}`, { method: 'DELETE' });
+  }
+
+  // Admin - Categories
+  async getAdminCategories() {
+    return this.request<any[]>('/admin/categories');
+  }
+
+  async createAdminCategory(data: { name: string; order?: number }) {
+    return this.request<any>('/admin/categories', { method: 'POST', body: data });
+  }
+
+  async updateAdminCategory(categoryId: string, data: { name?: string; order?: number }) {
+    return this.request<any>(`/admin/categories/${categoryId}`, { method: 'PUT', body: data });
+  }
+
+  async deleteAdminCategory(categoryId: string) {
+    return this.request<any>(`/admin/categories/${categoryId}`, { method: 'DELETE' });
+  }
+
+  async reorderAdminCategories(ids: string[]) {
+    return this.request<any>('/admin/categories/reorder', { method: 'POST', body: { ids } });
+  }
+
+  // Admin - Portfolio
+  async getAdminPortfolio() {
+    return this.request<any[]>('/admin/portfolio');
+  }
+
+  async createAdminPortfolioItem(data: { title: string; description?: string; imageUrl: string; gridSize?: number; order?: number }) {
+    return this.request<any>('/admin/portfolio', { method: 'POST', body: data });
+  }
+
+  async updateAdminPortfolioItem(itemId: string, data: any) {
+    return this.request<any>(`/admin/portfolio/${itemId}`, { method: 'PUT', body: data });
+  }
+
+  async deleteAdminPortfolioItem(itemId: string) {
+    return this.request<any>(`/admin/portfolio/${itemId}`, { method: 'DELETE' });
+  }
+
+  async reorderAdminPortfolio(ids: string[]) {
+    return this.request<any>('/admin/portfolio/reorder', { method: 'POST', body: { ids } });
+  }
+
+  // Admin - Reports
+  async getAdminReports(page = 1, limit = 20) {
+    return this.request<any>(`/admin/reports?page=${page}&limit=${limit}`);
+  }
+
+  async resolveAdminReport(reportId: string, status: 'RESOLVED' | 'DISMISSED') {
+    return this.request<any>(`/admin/reports/${reportId}`, { method: 'PUT', body: { status } });
+  }
 }
 
 export const api = new ApiClient(API_URL);
