@@ -162,15 +162,38 @@ NEXT_PUBLIC_API_URL="http://localhost:3001"
 
 ### AI Models
 
-The platform supports multiple AI providers through a unified interface:
+The platform uses **MegaLLM** as a unified API gateway to access multiple AI providers with a single API key. MegaLLM routes requests to the appropriate provider based on the model specified.
 
-| Model | Provider | Best For |
-|-------|----------|----------|
-| Claude Sonnet 4.5 | Anthropic | Fast, general purpose |
-| Claude Opus 4.5 | Anthropic | Complex tasks |
-| GPT-5 | OpenAI | Versatile |
-| Gemini 3 Pro | Google | Long context |
-| Grok 4.1 Fast | xAI | Budget-friendly |
+#### Configuration
+
+Set your MegaLLM API key in the environment:
+
+```env
+MEGALLM_API_KEY="your-megallm-api-key"
+MEGALLM_API_URL="https://api.megallm.com/v1"
+```
+
+Without a valid API key, the system will return mock responses for testing purposes.
+
+#### Supported Models
+
+| Model | ID | Provider | Best For |
+|-------|---|----------|----------|
+| Claude Sonnet 4.5 | claude-sonnet-4-5-20250929 | Anthropic | Fast, general purpose |
+| Claude Opus 4.5 | claude-opus-4-5-20251101 | Anthropic | Complex tasks |
+| GPT-5 | gpt-5 | OpenAI | Versatile |
+| Gemini 3 Pro | gemini-3-pro-preview | Google | Long context |
+| Grok 4.1 Fast | grok-4.1-fast-non-reasoning | xAI | Budget-friendly |
+
+#### API Interface
+
+The AI service uses a single unified interface:
+
+```typescript
+generateCode(provider, prompt, context)
+```
+
+This abstracts away the provider-specific details and allows seamless switching between models.
 
 ## VPS Deployment Guide
 

@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AI_MODELS, sanitizePrompt } from '@forgecraft/shared';
 
@@ -23,15 +23,52 @@ export interface GeneratedOutput {
   tokensUsed: number;
 }
 
+// Default token usage when not provided by API
+const DEFAULT_TOKEN_USAGE = 1000;
+
+export interface MegaLLMResponse {
+  id: string;
+  object: string;
+  created: number;
+  model: string;
+  choices: Array<{
+    index: number;
+    message: {
+      role: string;
+      content: string;
+    };
+    finish_reason: string;
+  }>;
+  usage: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+  };
+}
+
 @Injectable()
-export class AiService {
+export class AiService implements OnModuleInit {
   private readonly logger = new Logger(AiService.name);
   private readonly apiKey: string;
   private readonly apiUrl: string;
+  private isConfigured = false;
 
   constructor(private readonly configService: ConfigService) {
     this.apiKey = this.configService.get('MEGALLM_API_KEY', '');
     this.apiUrl = this.configService.get('MEGALLM_API_URL', 'https://api.megallm.com/v1');
+  }
+
+  onModuleInit() {
+    if (this.apiKey) {
+      this.isConfigured = true;
+      this.logger.log('MegaLLM API configured successfully');
+    } else {
+      this.logger.warn('MegaLLM API key not configured - AI generation will use mock responses');
+    }
+  }
+
+  isApiConfigured(): boolean {
+    return this.isConfigured;
   }
 
   async generateCode(params: GenerateCodeParams): Promise<GeneratedOutput> {
@@ -177,43 +214,126 @@ Output format - respond with a JSON object containing:
     return userPrompt;
   }
 
+  /**
+   * Call MegaLLM unified API
+   * MegaLLM provides a single endpoint that routes to different AI providers
+   * (Claude, GPT-5, Gemini, Grok) based on the model specified.
+   * 
+   * Uses the MEGALLM_API_KEY environment variable for authentication.
+   * The API follows OpenAI-compatible format for request/response.
+   */
   private async callMegaLLM(params: {
     model: string;
     systemPrompt: string;
     userPrompt: string;
     maxTokens: number;
   }): Promise<any> {
-    // For now, return mock data since we don't have actual API access
-    // In production, this would call the actual MegaLLM API
-    
+    // Return mock response when API key is not configured
     if (!this.apiKey) {
       this.logger.warn('MegaLLM API key not configured, returning mock response');
       return this.getMockResponse(params.userPrompt);
     }
 
-    const response = await fetch(`${this.apiUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.apiKey}`,
-      },
-      body: JSON.stringify({
-        model: params.model,
-        messages: [
-          { role: 'system', content: params.systemPrompt },
-          { role: 'user', content: params.userPrompt },
-        ],
-        max_tokens: params.maxTokens,
-        temperature: 0.7,
-      }),
-    });
+    const endpoint = `${this.apiUrl}/chat/completions`;
+    
+    this.logger.log(`Calling MegaLLM API: model=${params.model}`);
 
-    if (!response.ok) {
-      throw new Error(`MegaLLM API error: ${response.statusText}`);
+    const requestBody = {
+      model: params.model,
+      messages: [
+        { role: 'system', content: params.systemPrompt },
+        { role: 'user', content: params.userPrompt },
+      ],
+      max_tokens: params.maxTokens,
+      temperature: 0.7,
+      response_format: { type: 'json_object' },
+    };
+
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.apiKey}`,
+          'X-Request-Source': 'forgecraft-ai',
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (!response.ok) {
+        const errorBody = await response.text();
+        this.logger.error(`MegaLLM API error: ${response.status} ${response.statusText}`, errorBody);
+        
+        if (response.status === 401) {
+          throw new Error('Invalid MegaLLM API key. Please check your MEGALLM_API_KEY configuration.');
+        }
+        if (response.status === 429) {
+          throw new Error('MegaLLM API rate limit exceeded. Please try again later.');
+        }
+        if (response.status === 503) {
+          throw new Error('MegaLLM service temporarily unavailable. Please try again later.');
+        }
+        
+        throw new Error(`MegaLLM API error: ${response.status} ${response.statusText}`);
+      }
+
+      const data: MegaLLMResponse = await response.json();
+      
+      if (!data.choices || data.choices.length === 0) {
+        throw new Error('MegaLLM API returned no choices');
+      }
+
+      const content = data.choices[0].message.content;
+      const tokensUsed = data.usage?.total_tokens || 0;
+
+      this.logger.log(`MegaLLM response received: ${tokensUsed} tokens used`);
+
+      // Parse the JSON response
+      const parsed = this.parseJsonResponse(content);
+      parsed.tokensUsed = tokensUsed;
+      
+      return parsed;
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('MegaLLM')) {
+        throw error;
+      }
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to call MegaLLM API: ${errorMessage}`);
+      throw new Error(`Failed to communicate with MegaLLM API: ${errorMessage}`);
     }
+  }
 
-    const data = await response.json();
-    return JSON.parse(data.choices[0].message.content);
+  /**
+   * Parse JSON response from AI, handling various formats and potential issues
+   */
+  private parseJsonResponse(content: string): any {
+    try {
+      // Try direct JSON parse first
+      return JSON.parse(content);
+    } catch {
+      // Try to extract JSON from markdown code blocks
+      const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
+      if (jsonMatch) {
+        try {
+          return JSON.parse(jsonMatch[1].trim());
+        } catch {
+          // Continue to fallback
+        }
+      }
+      
+      // Try to find JSON object in the response
+      const objectMatch = content.match(/\{[\s\S]*\}/);
+      if (objectMatch) {
+        try {
+          return JSON.parse(objectMatch[0]);
+        } catch {
+          // Continue to fallback
+        }
+      }
+      
+      this.logger.error('Failed to parse AI response as JSON');
+      throw new Error('Invalid response format from AI');
+    }
   }
 
   private getMockResponse(prompt: string): any {
@@ -336,17 +456,55 @@ java {
 
   private parseGeneratedOutput(response: any): GeneratedOutput {
     if (typeof response === 'string') {
-      try {
-        response = JSON.parse(response);
-      } catch {
-        throw new Error('Invalid response format from AI');
-      }
+      response = this.parseJsonResponse(response);
     }
 
     return {
       files: response.files || {},
       summary: response.summary || 'Code generated successfully',
-      tokensUsed: response.tokensUsed || 1000,
+      tokensUsed: response.tokensUsed || DEFAULT_TOKEN_USAGE,
     };
+  }
+
+  /**
+   * Check if MegaLLM API is available and the API key is valid
+   */
+  async checkApiHealth(): Promise<{ available: boolean; message: string }> {
+    if (!this.apiKey) {
+      return { available: false, message: 'MegaLLM API key not configured' };
+    }
+
+    try {
+      const response = await fetch(`${this.apiUrl}/models`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+        },
+      });
+
+      if (response.ok) {
+        return { available: true, message: 'MegaLLM API is available' };
+      }
+
+      if (response.status === 401) {
+        return { available: false, message: 'Invalid MegaLLM API key' };
+      }
+
+      return { available: false, message: `MegaLLM API returned status ${response.status}` };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Connection failed';
+      return { available: false, message: `Cannot connect to MegaLLM API: ${errorMessage}` };
+    }
+  }
+
+  /**
+   * Get supported models from MegaLLM (returns configured models when API unavailable)
+   */
+  async getSupportedModels(): Promise<Array<{ id: string; name: string; provider: string }>> {
+    return Object.entries(AI_MODELS).map(([key, config]) => ({
+      id: key,
+      name: config.name,
+      provider: config.provider,
+    }));
   }
 }
