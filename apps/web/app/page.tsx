@@ -226,17 +226,6 @@ export default function HomePage() {
             © 2024 ForgeCraft AI. All rights reserved.
           </p>
         </div>
-        {/* Concealed admin link at bottom */}
-        <div className="container mt-8 pt-4 border-t border-muted/30">
-          <div className="flex justify-center">
-            <Link 
-              href="/admin" 
-              className="text-xs text-muted-foreground/50 hover:text-muted-foreground transition-colors"
-            >
-              Admin
-            </Link>
-          </div>
-        </div>
       </footer>
     </div>
   );

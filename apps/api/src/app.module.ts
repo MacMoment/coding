@@ -11,7 +11,6 @@ import { DocsModule } from './docs/docs.module';
 import { AiModule } from './ai/ai.module';
 import { CheckpointsModule } from './checkpoints/checkpoints.module';
 import { DeploymentsModule } from './deployments/deployments.module';
-import { AdminModule } from './admin/admin.module';
 import { PrismaModule } from './common/prisma/prisma.module';
 import { StorageModule } from './common/storage/storage.module';
 
@@ -55,7 +54,6 @@ import { StorageModule } from './common/storage/storage.module';
     AiModule,
     CheckpointsModule,
     DeploymentsModule,
-    AdminModule,
   ],
 })
 export class AppModule {}

@@ -517,32 +517,3 @@ model DocUsage {
   @@index([jobId])
   @@index([docId])
 }
-
-// ============================================
-// ADMIN: CATEGORIES & PORTFOLIO
-// ============================================
-
-model Category {
-  id        String   @id @default(uuid())
-  name      String   @unique
-  order     Int      @default(0)
-  
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([order])
-}
-
-model PortfolioItem {
-  id          String   @id @default(uuid())
-  title       String
-  description String?
-  imageUrl    String
-  gridSize    Int      @default(1) // 1-4 for grid spanning
-  order       Int      @default(0)
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@index([order])
-}
