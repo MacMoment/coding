@@ -1,0 +1,30 @@
+{
+  "name": "forgecraft-ai",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AI-powered builder for Minecraft plugins and Discord bots",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "test": "turbo test",
+    "db:generate": "npm run generate --workspace=@forgecraft/database",
+    "db:push": "npm run push --workspace=@forgecraft/database",
+    "db:migrate": "npm run migrate --workspace=@forgecraft/database",
+    "db:seed": "npm run seed --workspace=@forgecraft/database",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f"
+  },
+  "devDependencies": {
+    "turbo": "^2.0.0",
+    "typescript": "^5.3.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

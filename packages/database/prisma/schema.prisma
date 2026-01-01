@@ -1,0 +1,519 @@
+// This is your Prisma schema file for ForgeCraft AI
+// Full documentation: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  directUrl  = env("DIRECT_URL")
+  extensions = [vector, uuidOssp(map: "uuid-ossp")]
+}
+
+// ============================================
+// USER & AUTHENTICATION
+// ============================================
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  passwordHash  String?
+  displayName   String
+  avatar        String?
+  role          UserRole  @default(USER)
+  emailVerified Boolean   @default(false)
+  
+  // Subscription & Tokens
+  subscriptionTier SubscriptionTier @default(FREE)
+  tokenBalance     Int              @default(100)
+  referralCode     String           @unique @default(uuid())
+  referredBy       String?
+  lastDailyClaim   DateTime?
+  
+  // OAuth
+  googleId      String?   @unique
+  githubId      String?   @unique
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  // Relations
+  sessions          Session[]
+  projects          Project[]
+  checkpoints       Checkpoint[]
+  tokenTransactions TokenTransaction[]
+  subscriptions     Subscription[]
+  communityPosts    CommunityPost[]
+  likes             Like[]
+  comments          Comment[]
+  reports           Report[]
+  docContributions  DocEntry[]
+  generationJobs    GenerationJob[]
+  deployments       Deployment[]
+
+  @@index([email])
+  @@index([referralCode])
+}
+
+enum UserRole {
+  USER
+  MODERATOR
+  ADMIN
+}
+
+enum SubscriptionTier {
+  FREE
+  STARTER
+  PRO
+  ELITE
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  userId       String
+  token        String   @unique
+  expiresAt    DateTime
+  userAgent    String?
+  ipAddress    String?
+  createdAt    DateTime @default(now())
+  
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+}
+
+// ============================================
+// PROJECTS & FILES
+// ============================================
+
+model Project {
+  id              String        @id @default(uuid())
+  userId          String
+  name            String
+  description     String?
+  platform        Platform
+  template        String?
+  language        Language
+  isPublic        Boolean       @default(false)
+  
+  // Platform-specific config
+  config          Json          @default("{}")
+  
+  // Metadata
+  apiVersion      String?
+  packageName     String?
+  commandPrefix   String?
+  
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  // Relations
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  files           ProjectFile[]
+  checkpoints     Checkpoint[]
+  generationJobs  GenerationJob[]
+  communityPost   CommunityPost?
+  deployments     Deployment[]
+
+  @@index([userId])
+  @@index([platform])
+  @@index([isPublic])
+}
+
+enum Platform {
+  MINECRAFT_SPIGOT
+  MINECRAFT_PAPER
+  MINECRAFT_FABRIC
+  MINECRAFT_FORGE
+  DISCORD_NODE
+  DISCORD_PYTHON
+}
+
+enum Language {
+  JAVA
+  KOTLIN
+  JAVASCRIPT
+  TYPESCRIPT
+  PYTHON
+}
+
+model ProjectFile {
+  id          String   @id @default(uuid())
+  projectId   String
+  path        String
+  content     String
+  isDirectory Boolean  @default(false)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, path])
+  @@index([projectId])
+}
+
+// ============================================
+// CHECKPOINTS & VERSION HISTORY
+// ============================================
+
+model Checkpoint {
+  id          String   @id @default(uuid())
+  userId      String
+  projectId   String
+  summary     String
+  snapshotUrl String   // S3 path
+  diffMeta    Json?    // Optional diff metadata
+  
+  createdAt   DateTime @default(now())
+  
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([userId])
+}
+
+// ============================================
+// AI GENERATION
+// ============================================
+
+model GenerationJob {
+  id          String          @id @default(uuid())
+  userId      String
+  projectId   String
+  
+  // Request
+  prompt      String
+  model       AIModel
+  provider    AIProvider
+  context     Json            @default("{}")
+  
+  // Response
+  status      JobStatus       @default(PENDING)
+  output      Json?
+  error       String?
+  tokensUsed  Int             @default(0)
+  
+  // Timing
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime        @default(now())
+  
+  // Relations
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project     Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  docsUsed    DocUsage[]
+
+  @@index([userId])
+  @@index([projectId])
+  @@index([status])
+}
+
+enum AIProvider {
+  ANTHROPIC
+  OPENAI
+  GOOGLE
+  XAI
+}
+
+enum AIModel {
+  CLAUDE_SONNET_4_5
+  CLAUDE_OPUS_4_5
+  GPT_5
+  GEMINI_3_PRO
+  GROK_4_1_FAST
+}
+
+enum JobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+// ============================================
+// TOKENS & BILLING
+// ============================================
+
+model TokenTransaction {
+  id          String            @id @default(uuid())
+  userId      String
+  amount      Int               // Positive for credits, negative for debits
+  type        TransactionType
+  description String
+  reference   String?           // Related entity ID (job, subscription, etc.)
+  
+  createdAt   DateTime          @default(now())
+  
+  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([type])
+  @@index([createdAt])
+}
+
+enum TransactionType {
+  WELCOME_BONUS
+  DAILY_CLAIM
+  SUBSCRIPTION_REFILL
+  TOKEN_PACK_PURCHASE
+  GENERATION_COST
+  CHECKPOINT_COST
+  BUILD_COST
+  DEPLOY_COST
+  REFERRAL_BONUS
+  ADMIN_ADJUSTMENT
+}
+
+model Subscription {
+  id                  String             @id @default(uuid())
+  userId              String
+  
+  // Stripe
+  stripeCustomerId    String?
+  stripeSubscriptionId String?           @unique
+  stripePriceId       String?
+  
+  // Plan details
+  tier                SubscriptionTier
+  status              SubscriptionStatus @default(ACTIVE)
+  
+  // Billing cycle
+  currentPeriodStart  DateTime
+  currentPeriodEnd    DateTime
+  cancelAtPeriodEnd   Boolean            @default(false)
+  
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  
+  user                User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([stripeCustomerId])
+  @@index([stripeSubscriptionId])
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  UNPAID
+}
+
+// ============================================
+// DEPLOYMENTS
+// ============================================
+
+model Deployment {
+  id              String           @id @default(uuid())
+  userId          String
+  projectId       String
+  
+  // Deployment info
+  region          String           @default("us-east-1")
+  status          DeploymentStatus @default(PENDING)
+  checkpointId    String?
+  
+  // Secrets (encrypted)
+  secrets         Json             @default("{}")
+  
+  // Runtime
+  containerId     String?
+  publicUrl       String?
+  lastHeartbeat   DateTime?
+  
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  
+  // Relations
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project         Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  logs            DeploymentLog[]
+
+  @@index([userId])
+  @@index([projectId])
+  @@index([status])
+}
+
+enum DeploymentStatus {
+  PENDING
+  BUILDING
+  DEPLOYING
+  RUNNING
+  STOPPED
+  FAILED
+}
+
+model DeploymentLog {
+  id           String     @id @default(uuid())
+  deploymentId String
+  level        LogLevel   @default(INFO)
+  message      String
+  timestamp    DateTime   @default(now())
+  
+  deployment   Deployment @relation(fields: [deploymentId], references: [id], onDelete: Cascade)
+
+  @@index([deploymentId])
+  @@index([timestamp])
+}
+
+enum LogLevel {
+  DEBUG
+  INFO
+  WARN
+  ERROR
+}
+
+// ============================================
+// COMMUNITY
+// ============================================
+
+model CommunityPost {
+  id            String    @id @default(uuid())
+  userId        String
+  projectId     String    @unique
+  
+  // Content
+  name          String
+  description   String
+  tags          String[]
+  screenshots   String[]
+  version       String    @default("1.0.0")
+  license       String    @default("MIT")
+  
+  // Stats
+  downloads     Int       @default(0)
+  likesCount    Int       @default(0)
+  
+  // Moderation
+  isPublished   Boolean   @default(true)
+  isFeatured    Boolean   @default(false)
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  // Relations
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project       Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  likes         Like[]
+  comments      Comment[]
+  reports       Report[]
+
+  @@index([userId])
+  @@index([tags])
+  @@index([downloads])
+  @@index([likesCount])
+  @@index([isFeatured])
+}
+
+model Like {
+  id        String        @id @default(uuid())
+  userId    String
+  postId    String
+  createdAt DateTime      @default(now())
+  
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post      CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+  @@index([postId])
+}
+
+model Comment {
+  id        String        @id @default(uuid())
+  userId    String
+  postId    String
+  content   String
+  
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post      CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([postId])
+  @@index([userId])
+}
+
+model Report {
+  id        String        @id @default(uuid())
+  userId    String
+  postId    String
+  reason    String
+  details   String?
+  status    ReportStatus  @default(PENDING)
+  
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post      CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([postId])
+  @@index([status])
+}
+
+enum ReportStatus {
+  PENDING
+  REVIEWED
+  RESOLVED
+  DISMISSED
+}
+
+// ============================================
+// DOCUMENTATION SYSTEM
+// ============================================
+
+model DocEntry {
+  id            String   @id @default(uuid())
+  title         String
+  platform      Platform
+  version       String
+  content       String
+  source        String   // URL or reference
+  contributorId String?
+  isOfficial    Boolean  @default(false)
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  // Relations
+  contributor   User?    @relation(fields: [contributorId], references: [id], onDelete: SetNull)
+  embeddings    DocEmbedding[]
+  usages        DocUsage[]
+
+  @@index([platform])
+  @@index([version])
+  @@index([isOfficial])
+}
+
+model DocEmbedding {
+  id        String                       @id @default(uuid())
+  docId     String
+  chunk     String                       // Text chunk
+  embedding Unsupported("vector(1536)")  // OpenAI embedding dimension
+  
+  createdAt DateTime                     @default(now())
+  
+  doc       DocEntry                     @relation(fields: [docId], references: [id], onDelete: Cascade)
+
+  @@index([docId])
+}
+
+model DocUsage {
+  id        String        @id @default(uuid())
+  jobId     String
+  docId     String
+  relevance Float         // Similarity score
+  
+  job       GenerationJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  doc       DocEntry      @relation(fields: [docId], references: [id], onDelete: Cascade)
+
+  @@index([jobId])
+  @@index([docId])
+}
