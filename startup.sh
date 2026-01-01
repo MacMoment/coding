@@ -310,9 +310,14 @@ generate_secret() {
         result=$(timeout 5 dd if=/dev/urandom bs=1 count=$((length * 2)) 2>/dev/null | tr -dc 'a-zA-Z0-9' | head -c "$length")
     fi
     
-    # Final fallback using date and process info (portable hash alternatives)
+    # Final fallback using system entropy sources (portable hash alternatives)
     if [ -z "$result" ]; then
-        local seed="$(date +%s%N 2>/dev/null || date +%s)$$$(hostname 2>/dev/null || echo 'host')"
+        # Collect entropy from multiple sources
+        local uuid_entropy=""
+        if [ -r /proc/sys/kernel/random/uuid ]; then
+            uuid_entropy=$(cat /proc/sys/kernel/random/uuid 2>/dev/null)
+        fi
+        local seed="${uuid_entropy}$(date +%s%N 2>/dev/null || date +%s)$$$(hostname 2>/dev/null || echo 'host')${RANDOM:-0}"
         if command_exists sha256sum; then
             result=$(echo "$seed" | sha256sum | tr -dc 'a-zA-Z0-9' | head -c "$length")
         elif command_exists shasum; then
