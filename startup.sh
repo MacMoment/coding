@@ -92,18 +92,18 @@ fi
 # Print banner
 print_banner() {
     echo -e "${CYAN}"
-    echo '  ╔═══════════════════════════════════════════════════════════════════╗'
-    echo '  ║                                                                   ║'
-    echo '  ║   ███████╗ ██████╗ ██████╗  ██████╗ ███████╗ ██████╗██████╗ ███████╗████████╗  ║'
-    echo '  ║   ██╔════╝██╔═══██╗██╔══██╗██╔════╝ ██╔════╝██╔════╝██╔══██╗██╔══██║╚══██╔══╝  ║'
-    echo '  ║   █████╗  ██║   ██║██████╔╝██║  ███╗█████╗  ██║     ██████╔╝███████║   ██║     ║'
-    echo '  ║   ██╔══╝  ██║   ██║██╔══██╗██║   ██║██╔══╝  ██║     ██╔══██╗██╔══██║   ██║     ║'
-    echo '  ║   ██║     ╚██████╔╝██║  ██║╚██████╔╝███████╗╚██████╗██║  ██║██║  ██║   ██║     ║'
-    echo '  ║   ╚═╝      ╚═════╝ ╚═╝  ╚═╝ ╚═════╝ ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═╝   ╚═╝     ║'
-    echo '  ║                                                                   ║'
-    echo '  ║          AI-Powered Builder for Minecraft & Discord               ║'
-    echo '  ║                                                                   ║'
-    echo '  ╚═══════════════════════════════════════════════════════════════════╝'
+    echo '  ╔═════════════════════════════════════════════════════════════════════════════╗'
+    echo '  ║                                                                             ║'
+    echo '  ║   ███████╗ ██████╗ ██████╗  ██████╗ ███████╗ ██████╗██████╗  █████╗ ███████╗████████╗  ║'
+    echo '  ║   ██╔════╝██╔═══██╗██╔══██╗██╔════╝ ██╔════╝██╔════╝██╔══██╗██╔══██╗██╔════╝╚══██╔══╝  ║'
+    echo '  ║   █████╗  ██║   ██║██████╔╝██║  ███╗█████╗  ██║     ██████╔╝███████║█████╗     ██║     ║'
+    echo '  ║   ██╔══╝  ██║   ██║██╔══██╗██║   ██║██╔══╝  ██║     ██╔══██╗██╔══██║██╔══╝     ██║     ║'
+    echo '  ║   ██║     ╚██████╔╝██║  ██║╚██████╔╝███████╗╚██████╗██║  ██║██║  ██║██║        ██║     ║'
+    echo '  ║   ╚═╝      ╚═════╝ ╚═╝  ╚═╝ ╚═════╝ ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝        ╚═╝     ║'
+    echo '  ║                                                                             ║'
+    echo '  ║                AI-Powered Builder for Minecraft & Discord                   ║'
+    echo '  ║                                                                             ║'
+    echo '  ╚═════════════════════════════════════════════════════════════════════════════╝'
     echo -e "${NC}"
 }
 
@@ -366,8 +366,8 @@ start_docker_services() {
         compose_cmd="docker-compose"
     fi
     
-    # Check if services are already running
-    local running_services=$($compose_cmd ps --services --filter "status=running" 2>/dev/null | wc -l)
+    # Check if services are already running (compatible approach)
+    local running_services=$($compose_cmd ps -q 2>/dev/null | wc -l)
     
     if [ "$running_services" -gt 0 ]; then
         log_info "Some services are already running. Restarting..."
@@ -512,12 +512,12 @@ start_prod_server() {
     
     log_info "Starting production servers..."
     
-    # Start API in background
-    cd apps/api && npm run start:prod &
+    # Start API in background (using subshell to preserve working directory)
+    (cd apps/api && npm run start:prod) &
     API_PID=$!
     
-    # Start Web
-    cd ../web && npm run start &
+    # Start Web (using subshell to preserve working directory)
+    (cd apps/web && npm run start) &
     WEB_PID=$!
     
     # Wait for both processes
@@ -532,8 +532,8 @@ cleanup() {
     echo ""
     log_info "Shutting down..."
     
-    # Kill any background processes
-    jobs -p | xargs -r kill 2>/dev/null || true
+    # Kill any background processes with SIGTERM for graceful shutdown
+    jobs -p | xargs -r kill -TERM 2>/dev/null || true
     
     log_success "Goodbye!"
 }
