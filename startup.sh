@@ -298,8 +298,30 @@ check_prerequisites() {
 # Generate a random string for secrets
 generate_secret() {
     local length=${1:-32}
-    openssl rand -base64 $length 2>/dev/null | tr -dc 'a-zA-Z0-9' | head -c $length || \
-    cat /dev/urandom | tr -dc 'a-zA-Z0-9' | head -c $length
+    local result=""
+    
+    # Try openssl first (most reliable)
+    if command_exists openssl; then
+        result=$(openssl rand -base64 48 2>/dev/null | tr -dc 'a-zA-Z0-9' | head -c "$length")
+    fi
+    
+    # Fallback to /dev/urandom with timeout protection
+    if [ -z "$result" ] && [ -r /dev/urandom ]; then
+        result=$(timeout 5 dd if=/dev/urandom bs=64 count=1 2>/dev/null | tr -dc 'a-zA-Z0-9' | head -c "$length")
+    fi
+    
+    # Final fallback using date and process info
+    if [ -z "$result" ]; then
+        result=$(echo "$(date +%s%N)$$$(hostname)" | sha256sum 2>/dev/null | tr -dc 'a-zA-Z0-9' | head -c "$length")
+    fi
+    
+    # If still empty, generate a basic pseudo-random string
+    if [ -z "$result" ]; then
+        result="ChangeMeInProduction$(date +%s)"
+        log_warning "Could not generate secure random value. Please update JWT_SECRET manually."
+    fi
+    
+    printf '%s' "$result"
 }
 
 # Prompt user for input with a default value
@@ -308,6 +330,7 @@ prompt_with_default() {
     local default=$2
     local var_name=$3
     local is_secret=${4:-false}
+    local value=""
     
     if [ "$is_secret" = true ]; then
         echo -ne "${CYAN}$prompt${NC} ${DIM}(press Enter for auto-generated)${NC}: "
@@ -322,7 +345,8 @@ prompt_with_default() {
         value=${value:-$default}
     fi
     
-    eval "$var_name=\"$value\""
+    # Safely assign value to the variable using printf and read
+    printf -v "$var_name" '%s' "$value"
 }
 
 # Interactive environment setup
