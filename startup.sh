@@ -305,14 +305,21 @@ generate_secret() {
         result=$(openssl rand -base64 48 2>/dev/null | tr -dc 'a-zA-Z0-9' | head -c "$length")
     fi
     
-    # Fallback to /dev/urandom with timeout protection
+    # Fallback to /dev/urandom with timeout protection (read only what we need)
     if [ -z "$result" ] && [ -r /dev/urandom ]; then
-        result=$(timeout 5 dd if=/dev/urandom bs=64 count=1 2>/dev/null | tr -dc 'a-zA-Z0-9' | head -c "$length")
+        result=$(timeout 5 dd if=/dev/urandom bs=1 count=$((length * 2)) 2>/dev/null | tr -dc 'a-zA-Z0-9' | head -c "$length")
     fi
     
-    # Final fallback using date and process info
+    # Final fallback using date and process info (portable hash alternatives)
     if [ -z "$result" ]; then
-        result=$(echo "$(date +%s%N)$$$(hostname)" | sha256sum 2>/dev/null | tr -dc 'a-zA-Z0-9' | head -c "$length")
+        local seed="$(date +%s%N 2>/dev/null || date +%s)$$$(hostname 2>/dev/null || echo 'host')"
+        if command_exists sha256sum; then
+            result=$(echo "$seed" | sha256sum | tr -dc 'a-zA-Z0-9' | head -c "$length")
+        elif command_exists shasum; then
+            result=$(echo "$seed" | shasum -a 256 | tr -dc 'a-zA-Z0-9' | head -c "$length")
+        elif command_exists md5sum; then
+            result=$(echo "$seed$seed" | md5sum | tr -dc 'a-zA-Z0-9' | head -c "$length")
+        fi
     fi
     
     # If still empty, generate a basic pseudo-random string
@@ -367,6 +374,7 @@ setup_env_interactive() {
     prompt_with_default "PostgreSQL Password" "postgres" DB_PASS
     
     DATABASE_URL="postgresql://${DB_USER}:${DB_PASS}@${DB_HOST}:${DB_PORT}/${DB_NAME}?schema=public"
+    # DIRECT_URL is used by Prisma for migrations when using connection pooling (e.g., PgBouncer)
     DIRECT_URL="$DATABASE_URL"
     echo ""
     
@@ -474,7 +482,7 @@ setup_environment() {
         echo -ne "${CYAN}Do you want to generate a new .env file? [y/N]:${NC} "
         read -r response
         if [[ "$response" =~ ^[Yy]$ ]]; then
-            mv .env .env.backup.$(date +%Y%m%d_%H%M%S)
+            mv .env ".env.backup.$(date +%Y%m%d_%H%M%S).$$"
             log_info "Backed up existing .env file"
             setup_env_interactive
         else
@@ -527,7 +535,7 @@ validate_environment() {
         missing_vars+=("JWT_SECRET")
     fi
     
-    if [ ${#missing_vars[@]} -gt 0 ]; then
+    if [ "${#missing_vars[@]}" -gt 0 ]; then
         log_error "Missing required environment variables:"
         for var in "${missing_vars[@]}"; do
             echo -e "  ${RED}•${NC} $var"
