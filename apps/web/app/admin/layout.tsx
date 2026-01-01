@@ -8,7 +8,7 @@ import {
   Users,
   Package,
   Tags,
-  Images,
+  Image,
   Flag,
   Sparkles,
   ChevronLeft,
@@ -25,7 +25,7 @@ const navItems = [
   { href: '/admin/users', icon: Users, label: 'Users' },
   { href: '/admin/products', icon: Package, label: 'Products' },
   { href: '/admin/categories', icon: Tags, label: 'Categories' },
-  { href: '/admin/portfolio', icon: Images, label: 'Portfolio' },
+  { href: '/admin/portfolio', icon: Image, label: 'Portfolio' },
   { href: '/admin/reports', icon: Flag, label: 'Reports' },
 ];
 

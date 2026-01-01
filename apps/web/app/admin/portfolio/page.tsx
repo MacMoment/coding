@@ -12,7 +12,7 @@ import {
   Trash2,
   GripVertical,
   Loader2,
-  Images,
+  Image,
   Grid2X2,
 } from 'lucide-react';
 
@@ -207,7 +207,7 @@ export default function AdminPortfolioPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Images className="h-5 w-5" />
+            <Image className="h-5 w-5" />
             Portfolio Items
           </CardTitle>
           <p className="text-sm text-muted-foreground">
@@ -221,7 +221,7 @@ export default function AdminPortfolioPage() {
             </div>
           ) : items.length === 0 ? (
             <div className="text-center py-12">
-              <Images className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <Image className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <p className="text-muted-foreground">No portfolio items yet</p>
               <Button className="mt-4" onClick={openCreateModal}>
                 Add First Item
