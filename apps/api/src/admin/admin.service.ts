@@ -267,7 +267,12 @@ export class AdminService {
     });
   }
 
-  async deleteUser(userId: string) {
+  async deleteUser(userId: string, currentUserId: string) {
+    // Prevent self-deletion
+    if (userId === currentUserId) {
+      throw new BadRequestException('Cannot delete your own account');
+    }
+
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
     });

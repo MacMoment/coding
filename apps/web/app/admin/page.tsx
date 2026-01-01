@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Users, FolderOpen, Package, Coins, TrendingUp, Activity } from 'lucide-react';
 import { api } from '@/lib/api';
+import { formatPlatformName } from '@/lib/utils';
 
 interface DashboardStats {
   totals: {
@@ -197,7 +198,7 @@ export default function AdminDashboardPage() {
               {stats?.distributions.projectsByPlatform.map((item) => (
                 <div key={item.platform} className="flex items-center justify-between">
                   <span className="text-sm font-medium truncate max-w-[120px]">
-                    {item.platform.replace('_', ' ')}
+                    {formatPlatformName(item.platform)}
                   </span>
                   <div className="flex items-center">
                     <div className="w-24 h-2 bg-muted rounded-full mr-3">

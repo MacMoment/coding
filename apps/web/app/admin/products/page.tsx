@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { api } from '@/lib/api';
+import { formatPlatformName } from '@/lib/utils';
 import {
   Search,
   ChevronLeft,
@@ -242,7 +243,7 @@ export default function AdminProductsPage() {
                         <div className="text-xs text-muted-foreground">{product.user.email}</div>
                       </td>
                       <td className="p-4">
-                        <span className="text-sm">{product.project.platform.replace('_', ' ')}</span>
+                        <span className="text-sm">{formatPlatformName(product.project.platform)}</span>
                       </td>
                       <td className="p-4">
                         <div className="text-sm">

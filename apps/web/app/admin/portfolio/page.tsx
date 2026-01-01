@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { api } from '@/lib/api';
+import { PLACEHOLDER_IMAGE_URL } from '@/lib/utils';
 import {
   Plus,
   Edit,
@@ -247,7 +248,7 @@ export default function AdminPortfolioPage() {
                         alt={item.title}
                         className="w-full h-full object-cover"
                         onError={(e) => {
-                          (e.target as HTMLImageElement).src = 'https://via.placeholder.com/400x300?text=Image+Error';
+                          (e.target as HTMLImageElement).src = PLACEHOLDER_IMAGE_URL;
                         }}
                       />
                     )}
@@ -336,7 +337,7 @@ export default function AdminPortfolioPage() {
                           alt="Preview"
                           className="w-full h-full object-cover"
                           onError={(e) => {
-                            (e.target as HTMLImageElement).src = 'https://via.placeholder.com/400x300?text=Invalid+URL';
+                            (e.target as HTMLImageElement).src = PLACEHOLDER_IMAGE_URL;
                           }}
                         />
                       </div>

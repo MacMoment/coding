@@ -8,6 +8,7 @@ import {
   Param,
   Query,
   UseGuards,
+  Request,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { AdminService } from './admin.service';
@@ -103,9 +104,9 @@ export class AdminController {
   @ApiOperation({ summary: 'Delete a user' })
   @ApiResponse({ status: 200, description: 'User deleted' })
   @ApiResponse({ status: 404, description: 'User not found' })
-  @ApiResponse({ status: 400, description: 'Cannot delete admin users' })
-  async deleteUser(@Param('userId') userId: string) {
-    return this.adminService.deleteUser(userId);
+  @ApiResponse({ status: 400, description: 'Cannot delete admin users or yourself' })
+  async deleteUser(@Param('userId') userId: string, @Request() req: any) {
+    return this.adminService.deleteUser(userId, req.user.id);
   }
 
   // ============================================
