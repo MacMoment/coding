@@ -60,3 +60,5 @@ prisma/migrations/*.sql.bak
 
 # OS
 Thumbs.db
+# Environment backup files
+.env.backup.*
